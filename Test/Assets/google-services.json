@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "651626606147",
+    "firebase_url": "https://final-firebase-userdata-default-rtdb.firebaseio.com",
+    "project_id": "final-firebase-userdata",
+    "storage_bucket": "final-firebase-userdata.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:651626606147:android:ba2c2f035a292a35e62ef6",
+        "android_client_info": {
+          "package_name": "com.DefaultCompany.FirebaseTest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTellawEqXlUsakhD6bz5ywsWg9eC692M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
