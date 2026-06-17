@@ -6,7 +6,6 @@ using UnityEngine.UI;
 
 public class UserLogin : MonoBehaviour
 {
-    FirebaseDatabase database;
     DatabaseReference reference;
     UnityMainThreadDispatcher dispatcher;
 
@@ -21,10 +20,11 @@ public class UserLogin : MonoBehaviour
     [SerializeField] string NextSceneName = "MainScene";
     [SerializeField] bool LoadNextSceneAfterLogin = false;
 
+    bool isLoggingIn;
+
     void Start()
     {
-        database = FirebaseDatabase.GetInstance(databaseUrl);
-        reference = database.RootReference;
+        reference = FirebaseDatabaseProvider.GetRootReference(databaseUrl);
         SetupDispatcher();
     }
 
@@ -41,6 +41,12 @@ public class UserLogin : MonoBehaviour
 
     public void OnClickLogin()
     {
+        if (isLoggingIn)
+        {
+            SetMessage("로그인 처리 중입니다.");
+            return;
+        }
+
         if (NickNameInput == null)
         {
             SetMessage("NickNameInput이 연결되지 않았습니다.");
@@ -55,6 +61,7 @@ public class UserLogin : MonoBehaviour
             return;
         }
 
+        isLoggingIn = true;
         SetMessage("로그인 확인 중...");
         Login(nickName);
     }
@@ -70,10 +77,7 @@ public class UserLogin : MonoBehaviour
             {
                 if (task.IsFaulted || task.IsCanceled)
                 {
-                    dispatcher.Enqueue(() =>
-                    {
-                        SetMessage("Firebase 읽기 오류");
-                    });
+                    LoginByFullScan(nickName);
                     return;
                 }
 
@@ -81,34 +85,96 @@ public class UserLogin : MonoBehaviour
 
                 if (!snapshot.HasChildren)
                 {
+                    LoginByFullScan(nickName);
+                    return;
+                }
+
+                string selectedUserKey = "";
+                int matchedCount = 0;
+
+                foreach (DataSnapshot userSnapshot in snapshot.Children)
+                {
+                    selectedUserKey = userSnapshot.Key;
+                    matchedCount++;
+                }
+
+                CompleteLogin(selectedUserKey, nickName, matchedCount);
+            });
+    }
+
+    void LoginByFullScan(string nickName)
+    {
+        reference
+            .Child("UserInfo")
+            .GetValueAsync()
+            .ContinueWith(task =>
+            {
+                if (task.IsFaulted || task.IsCanceled)
+                {
                     dispatcher.Enqueue(() =>
                     {
+                        isLoggingIn = false;
+                        SetMessage("Firebase 읽기 오류");
+                    });
+                    return;
+                }
+
+                string selectedUserKey = "";
+                int matchedCount = 0;
+
+                foreach (DataSnapshot userSnapshot in task.Result.Children)
+                {
+                    DataSnapshot nickNameSnapshot = userSnapshot.Child("NickName");
+
+                    if (nickNameSnapshot.Value != null && nickNameSnapshot.Value.ToString() == nickName)
+                    {
+                        selectedUserKey = userSnapshot.Key;
+                        matchedCount++;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(selectedUserKey))
+                {
+                    dispatcher.Enqueue(() =>
+                    {
+                        isLoggingIn = false;
                         SetMessage("존재하지 않는 닉네임입니다.");
                     });
                     return;
                 }
 
-                foreach (DataSnapshot userSnapshot in snapshot.Children)
-                {
-                    string userKey = userSnapshot.Key;
-
-                    dispatcher.Enqueue(() =>
-                    {
-                        PlayerPrefs.SetString("UserKey", userKey);
-                        PlayerPrefs.SetString("UserNickName", nickName);
-                        PlayerPrefs.Save();
-
-                        SetMessage("로그인 성공");
-
-                        if (LoadNextSceneAfterLogin)
-                        {
-                            SceneManager.LoadScene(NextSceneName);
-                        }
-                    });
-
-                    break;
-                }
+                CompleteLogin(selectedUserKey, nickName, matchedCount);
             });
+    }
+
+    void CompleteLogin(string userKey, string nickName, int matchedCount)
+    {
+        dispatcher.Enqueue(() =>
+        {
+            if (string.IsNullOrEmpty(userKey))
+            {
+                isLoggingIn = false;
+                SetMessage("존재하지 않는 닉네임입니다.");
+                return;
+            }
+
+            PlayerPrefs.SetString("UserKey", userKey);
+            PlayerPrefs.SetString("UserNickName", nickName);
+            PlayerPrefs.Save();
+
+            isLoggingIn = false;
+            SetMessage("로그인 성공");
+
+            if (matchedCount > 1)
+            {
+                Debug.LogWarning("중복 닉네임 데이터 " + matchedCount + "개 중 " + userKey + "로 로그인했습니다.");
+            }
+
+            if (LoadNextSceneAfterLogin)
+            {
+                SceneManager.LoadScene(NextSceneName);
+            }
+        });
     }
 
     void SetMessage(string message)
@@ -117,7 +183,5 @@ public class UserLogin : MonoBehaviour
         {
             CheckText.text = message;
         }
-
-        Debug.Log(message);
     }
 }

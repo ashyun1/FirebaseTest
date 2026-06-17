@@ -7,7 +7,6 @@ using UnityEngine.UI;
 
 public class ShopManager : MonoBehaviour
 {
-    FirebaseDatabase database;
     DatabaseReference reference;
     UnityMainThreadDispatcher dispatcher;
 
@@ -27,8 +26,7 @@ public class ShopManager : MonoBehaviour
 
     void Start()
     {
-        database = FirebaseDatabase.GetInstance(databaseUrl);
-        reference = database.RootReference;
+        reference = FirebaseDatabaseProvider.GetRootReference(databaseUrl);
         SetupDispatcher();
 
         SetItemPriceText();
@@ -83,10 +81,10 @@ public class ShopManager : MonoBehaviour
                     return;
                 }
 
-                currentCoin = ReadInt(snapshot.Child("Coin"), 0);
+                currentCoin = AdvancedDataUtility.ReadInt(snapshot.Child("Coin"), 0);
 
                 string inventoryJson = snapshot.Child("Inventory").Value == null ? "" : snapshot.Child("Inventory").Value.ToString();
-                inventory = ParseInventory(inventoryJson);
+                inventory = AdvancedDataUtility.ParseInventory(inventoryJson);
 
                 dispatcher.Enqueue(() =>
                 {
@@ -98,14 +96,14 @@ public class ShopManager : MonoBehaviour
 
     void SetItemPriceText()
     {
-        SetText(HealthPackPriceText, "HealthPack : 120 Coin");
-        SetText(BarrierCorePriceText, "BarrierCore : 240 Coin");
-        SetText(FlameRunePriceText, "FlameRune : 360 Coin");
+        SetText(HealthPackPriceText, "HealthPack : 120 코인");
+        SetText(BarrierCorePriceText, "BarrierCore : 240 코인");
+        SetText(FlameRunePriceText, "FlameRune : 360 코인");
     }
 
     void RefreshUI()
     {
-        SetText(CoinText, "Coin : " + currentCoin);
+        SetText(CoinText, "코인 : " + currentCoin);
         SetItemPriceText();
     }
 
@@ -180,60 +178,6 @@ public class ShopManager : MonoBehaviour
             });
     }
 
-    Dictionary<string, int> ParseInventory(string inventoryJson)
-    {
-        Dictionary<string, int> result = new Dictionary<string, int>();
-        result["HealthPack"] = 0;
-        result["BarrierCore"] = 0;
-        result["FlameRune"] = 0;
-
-        if (string.IsNullOrEmpty(inventoryJson))
-        {
-            return result;
-        }
-
-        Dictionary<string, int> loadedInventory = JsonConvert.DeserializeObject<Dictionary<string, int>>(inventoryJson);
-
-        if (loadedInventory == null)
-        {
-            return result;
-        }
-
-        if (loadedInventory.ContainsKey("HealthPack"))
-        {
-            result["HealthPack"] = loadedInventory["HealthPack"];
-        }
-
-        if (loadedInventory.ContainsKey("BarrierCore"))
-        {
-            result["BarrierCore"] = loadedInventory["BarrierCore"];
-        }
-
-        if (loadedInventory.ContainsKey("FlameRune"))
-        {
-            result["FlameRune"] = loadedInventory["FlameRune"];
-        }
-
-        return result;
-    }
-
-    int ReadInt(DataSnapshot snapshot, int fallbackValue)
-    {
-        if (snapshot.Value == null)
-        {
-            return fallbackValue;
-        }
-
-        int value;
-
-        if (int.TryParse(snapshot.Value.ToString(), out value))
-        {
-            return value;
-        }
-
-        return fallbackValue;
-    }
-
     void SetText(Text targetText, string message)
     {
         if (targetText != null)
@@ -245,6 +189,5 @@ public class ShopManager : MonoBehaviour
     void SetMessage(string message)
     {
         SetText(MessageText, message);
-        Debug.Log(message);
     }
 }

@@ -6,7 +6,6 @@ using UnityEngine.UI;
 
 public class UserRegister : MonoBehaviour
 {
-    FirebaseDatabase database;
     DatabaseReference reference;
     UnityMainThreadDispatcher dispatcher;
 
@@ -21,10 +20,11 @@ public class UserRegister : MonoBehaviour
     [SerializeField] string NextSceneName = "MainScene";
     [SerializeField] bool LoadNextSceneAfterRegister = false;
 
+    bool isRegistering;
+
     void Start()
     {
-        database = FirebaseDatabase.GetInstance(databaseUrl);
-        reference = database.RootReference;
+        reference = FirebaseDatabaseProvider.GetRootReference(databaseUrl);
         SetupDispatcher();
     }
 
@@ -41,6 +41,12 @@ public class UserRegister : MonoBehaviour
 
     public void OnClickRegister()
     {
+        if (isRegistering)
+        {
+            SetMessage("회원가입 처리 중입니다.");
+            return;
+        }
+
         if (NickNameInput == null)
         {
             SetMessage("NickNameInput이 연결되지 않았습니다.");
@@ -55,6 +61,7 @@ public class UserRegister : MonoBehaviour
             return;
         }
 
+        isRegistering = true;
         SetMessage("닉네임 확인 중...");
         CheckDuplicateNickName(nickName);
     }
@@ -70,10 +77,7 @@ public class UserRegister : MonoBehaviour
             {
                 if (task.IsFaulted || task.IsCanceled)
                 {
-                    dispatcher.Enqueue(() =>
-                    {
-                        SetMessage("Firebase 읽기 오류");
-                    });
+                    CheckDuplicateNickNameByFullScan(nickName);
                     return;
                 }
 
@@ -83,9 +87,46 @@ public class UserRegister : MonoBehaviour
                 {
                     dispatcher.Enqueue(() =>
                     {
+                        isRegistering = false;
                         SetMessage("이미 사용 중인 닉네임입니다.");
                     });
                     return;
+                }
+
+                CheckDuplicateNickNameByFullScan(nickName);
+            });
+    }
+
+    void CheckDuplicateNickNameByFullScan(string nickName)
+    {
+        reference
+            .Child("UserInfo")
+            .GetValueAsync()
+            .ContinueWith(task =>
+            {
+                if (task.IsFaulted || task.IsCanceled)
+                {
+                    dispatcher.Enqueue(() =>
+                    {
+                        isRegistering = false;
+                        SetMessage("Firebase 읽기 오류");
+                    });
+                    return;
+                }
+
+                foreach (DataSnapshot userSnapshot in task.Result.Children)
+                {
+                    DataSnapshot nickNameSnapshot = userSnapshot.Child("NickName");
+
+                    if (nickNameSnapshot.Value != null && nickNameSnapshot.Value.ToString() == nickName)
+                    {
+                        dispatcher.Enqueue(() =>
+                        {
+                            isRegistering = false;
+                            SetMessage("이미 사용 중인 닉네임입니다.");
+                        });
+                        return;
+                    }
                 }
 
                 CreateUser(nickName);
@@ -106,6 +147,7 @@ public class UserRegister : MonoBehaviour
             {
                 if (task.IsFaulted || task.IsCanceled)
                 {
+                    isRegistering = false;
                     SetMessage("회원가입 실패");
                     return;
                 }
@@ -115,6 +157,7 @@ public class UserRegister : MonoBehaviour
                 PlayerPrefs.Save();
 
                 SetMessage("회원가입 완료");
+                isRegistering = false;
 
                 if (LoadNextSceneAfterRegister)
                 {
@@ -130,7 +173,5 @@ public class UserRegister : MonoBehaviour
         {
             CheckText.text = message;
         }
-
-        Debug.Log(message);
     }
 }

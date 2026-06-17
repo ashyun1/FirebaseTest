@@ -7,7 +7,6 @@ using UnityEngine.UI;
 
 public class InventoryManager : MonoBehaviour
 {
-    FirebaseDatabase database;
     DatabaseReference reference;
     UnityMainThreadDispatcher dispatcher;
 
@@ -25,8 +24,7 @@ public class InventoryManager : MonoBehaviour
 
     void Start()
     {
-        database = FirebaseDatabase.GetInstance(databaseUrl);
-        reference = database.RootReference;
+        reference = FirebaseDatabaseProvider.GetRootReference(databaseUrl);
         SetupDispatcher();
 
         userKey = PlayerPrefs.GetString("UserKey");
@@ -81,7 +79,7 @@ public class InventoryManager : MonoBehaviour
                 }
 
                 string inventoryJson = snapshot.Value.ToString();
-                inventory = ParseInventory(inventoryJson);
+                inventory = AdvancedDataUtility.ParseInventory(inventoryJson);
 
                 dispatcher.Enqueue(() =>
                 {
@@ -160,43 +158,6 @@ public class InventoryManager : MonoBehaviour
             });
     }
 
-    Dictionary<string, int> ParseInventory(string inventoryJson)
-    {
-        Dictionary<string, int> result = new Dictionary<string, int>();
-        result["HealthPack"] = 0;
-        result["BarrierCore"] = 0;
-        result["FlameRune"] = 0;
-
-        if (string.IsNullOrEmpty(inventoryJson))
-        {
-            return result;
-        }
-
-        Dictionary<string, int> loadedInventory = JsonConvert.DeserializeObject<Dictionary<string, int>>(inventoryJson);
-
-        if (loadedInventory == null)
-        {
-            return result;
-        }
-
-        if (loadedInventory.ContainsKey("HealthPack"))
-        {
-            result["HealthPack"] = loadedInventory["HealthPack"];
-        }
-
-        if (loadedInventory.ContainsKey("BarrierCore"))
-        {
-            result["BarrierCore"] = loadedInventory["BarrierCore"];
-        }
-
-        if (loadedInventory.ContainsKey("FlameRune"))
-        {
-            result["FlameRune"] = loadedInventory["FlameRune"];
-        }
-
-        return result;
-    }
-
     string GetUseMessage(string itemName)
     {
         if (itemName == "HealthPack")
@@ -228,6 +189,5 @@ public class InventoryManager : MonoBehaviour
     void SetMessage(string message)
     {
         SetText(MessageText, message);
-        Debug.Log(message);
     }
 }

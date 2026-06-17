@@ -25,7 +25,7 @@ public class UserData
         Dictionary<string, bool> unitList = new Dictionary<string, bool>();
         unitList["Unit1"] = true;
 
-        for (int i = 2; i <= 6; i++)
+        for (int i = 2; i <= 4; i++)
         {
             unitList["Unit" + i] = false;
         }
