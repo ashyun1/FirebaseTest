@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:651626606147:android:ba2c2f035a292a35e62ef6",
+        "mobilesdk_app_id": "1:651626606147:android:27734daad79a7290e62ef6",
         "android_client_info": {
-          "package_name": "com.DefaultCompany.FirebaseTest"
+          "package_name": "com.DefaultCompany.Test"
         }
       },
       "oauth_client": [],

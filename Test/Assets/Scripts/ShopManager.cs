@@ -12,11 +12,14 @@ public class ShopManager : MonoBehaviour
     UnityMainThreadDispatcher dispatcher;
 
     [Header("Firebase")]
-    [SerializeField] string databaseUrl = "https://myproject-76240-default-rtdb.asia-southeast1.firebasedatabase.app/";
+    [SerializeField] string databaseUrl = "https://final-firebase-userdata-default-rtdb.firebaseio.com";
 
     [Header("UI")]
     [SerializeField] Text CoinText;
     [SerializeField] Text MessageText;
+    [SerializeField] Text HealthPackPriceText;
+    [SerializeField] Text BarrierCorePriceText;
+    [SerializeField] Text FlameRunePriceText;
 
     string userKey;
     int currentCoin;
@@ -26,17 +29,30 @@ public class ShopManager : MonoBehaviour
     {
         database = FirebaseDatabase.GetInstance(databaseUrl);
         reference = database.RootReference;
-        dispatcher = UnityMainThreadDispatcher.Instance();
+        SetupDispatcher();
+
+        SetItemPriceText();
 
         userKey = PlayerPrefs.GetString("UserKey");
 
         if (string.IsNullOrEmpty(userKey))
         {
-            MessageText.text = "로그인 정보가 없습니다.";
+            SetMessage("로그인 정보가 없습니다.");
             return;
         }
 
         LoadUserData();
+    }
+
+    void SetupDispatcher()
+    {
+        if (!UnityMainThreadDispatcher.Exists())
+        {
+            GameObject dispatcherObject = new GameObject("UnityMainThreadDispatcher");
+            dispatcherObject.AddComponent<UnityMainThreadDispatcher>();
+        }
+
+        dispatcher = UnityMainThreadDispatcher.Instance();
     }
 
     void LoadUserData()
@@ -47,55 +63,78 @@ public class ShopManager : MonoBehaviour
             .GetValueAsync()
             .ContinueWith(task =>
             {
-                if (task.IsFaulted)
+                if (task.IsFaulted || task.IsCanceled)
                 {
                     dispatcher.Enqueue(() =>
                     {
-                        MessageText.text = "유저 정보 불러오기 실패";
+                        SetMessage("유저 정보 불러오기 실패");
                     });
                     return;
                 }
 
                 DataSnapshot snapshot = task.Result;
 
-                currentCoin = int.Parse(snapshot.Child("Coin").Value.ToString());
+                if (!snapshot.Exists)
+                {
+                    dispatcher.Enqueue(() =>
+                    {
+                        SetMessage("유저 정보가 없습니다. 다시 로그인하세요.");
+                    });
+                    return;
+                }
 
-                string inventoryJson = snapshot.Child("Inventory").Value.ToString();
-                inventory = JsonConvert.DeserializeObject<Dictionary<string, int>>(inventoryJson);
+                currentCoin = ReadInt(snapshot.Child("Coin"), 0);
+
+                string inventoryJson = snapshot.Child("Inventory").Value == null ? "" : snapshot.Child("Inventory").Value.ToString();
+                inventory = ParseInventory(inventoryJson);
 
                 dispatcher.Enqueue(() =>
                 {
                     RefreshUI();
-                    MessageText.text = "유저 정보 불러오기 완료";
+                    SetMessage("유저 정보 불러오기 완료");
                 });
             });
     }
 
+    void SetItemPriceText()
+    {
+        SetText(HealthPackPriceText, "HealthPack : 120 Coin");
+        SetText(BarrierCorePriceText, "BarrierCore : 240 Coin");
+        SetText(FlameRunePriceText, "FlameRune : 360 Coin");
+    }
+
     void RefreshUI()
     {
-        CoinText.text = "Coin : " + currentCoin;
+        SetText(CoinText, "Coin : " + currentCoin);
+        SetItemPriceText();
     }
 
-    public void OnClickBuyPotion()
+    public void OnClickBuyHealthPack()
     {
-        BuyItem("Potion", 100);
+        BuyItem("HealthPack", 120);
     }
 
-    public void OnClickBuyBomb()
+    public void OnClickBuyBarrierCore()
     {
-        BuyItem("Bomb", 200);
+        BuyItem("BarrierCore", 240);
     }
 
-    public void OnClickBuyTicket()
+    public void OnClickBuyFlameRune()
     {
-        BuyItem("Ticket", 300);
+        BuyItem("FlameRune", 360);
     }
 
     void BuyItem(string itemName, int price)
     {
+        if (string.IsNullOrEmpty(userKey))
+        {
+            SetMessage("로그인 정보가 없습니다.");
+            return;
+        }
+
         if (currentCoin < price)
         {
-            MessageText.text = "코인이 부족합니다.";
+            SetMessage("코인이 부족합니다.");
             return;
         }
 
@@ -127,20 +166,85 @@ public class ShopManager : MonoBehaviour
             .UpdateChildrenAsync(updateData)
             .ContinueWith(task =>
             {
-                if (task.IsFaulted)
-                {
-                    dispatcher.Enqueue(() =>
-                    {
-                        MessageText.text = "구매 저장 실패";
-                    });
-                    return;
-                }
-
                 dispatcher.Enqueue(() =>
                 {
+                    if (task.IsFaulted || task.IsCanceled)
+                    {
+                        SetMessage("구매 저장 실패");
+                        return;
+                    }
+
                     RefreshUI();
-                    MessageText.text = boughtItemName + " 구매 완료";
+                    SetMessage(boughtItemName + " 구매 완료");
                 });
             });
+    }
+
+    Dictionary<string, int> ParseInventory(string inventoryJson)
+    {
+        Dictionary<string, int> result = new Dictionary<string, int>();
+        result["HealthPack"] = 0;
+        result["BarrierCore"] = 0;
+        result["FlameRune"] = 0;
+
+        if (string.IsNullOrEmpty(inventoryJson))
+        {
+            return result;
+        }
+
+        Dictionary<string, int> loadedInventory = JsonConvert.DeserializeObject<Dictionary<string, int>>(inventoryJson);
+
+        if (loadedInventory == null)
+        {
+            return result;
+        }
+
+        if (loadedInventory.ContainsKey("HealthPack"))
+        {
+            result["HealthPack"] = loadedInventory["HealthPack"];
+        }
+
+        if (loadedInventory.ContainsKey("BarrierCore"))
+        {
+            result["BarrierCore"] = loadedInventory["BarrierCore"];
+        }
+
+        if (loadedInventory.ContainsKey("FlameRune"))
+        {
+            result["FlameRune"] = loadedInventory["FlameRune"];
+        }
+
+        return result;
+    }
+
+    int ReadInt(DataSnapshot snapshot, int fallbackValue)
+    {
+        if (snapshot.Value == null)
+        {
+            return fallbackValue;
+        }
+
+        int value;
+
+        if (int.TryParse(snapshot.Value.ToString(), out value))
+        {
+            return value;
+        }
+
+        return fallbackValue;
+    }
+
+    void SetText(Text targetText, string message)
+    {
+        if (targetText != null)
+        {
+            targetText.text = message;
+        }
+    }
+
+    void SetMessage(string message)
+    {
+        SetText(MessageText, message);
+        Debug.Log(message);
     }
 }

@@ -11,7 +11,7 @@ public class UserLogin : MonoBehaviour
     UnityMainThreadDispatcher dispatcher;
 
     [Header("Firebase")]
-    [SerializeField] string databaseUrl = "https://myproject-76240-default-rtdb.asia-southeast1.firebasedatabase.app/";
+    [SerializeField] string databaseUrl = "https://final-firebase-userdata-default-rtdb.firebaseio.com";
 
     [Header("UI")]
     [SerializeField] InputField NickNameInput;
@@ -25,20 +25,37 @@ public class UserLogin : MonoBehaviour
     {
         database = FirebaseDatabase.GetInstance(databaseUrl);
         reference = database.RootReference;
+        SetupDispatcher();
+    }
+
+    void SetupDispatcher()
+    {
+        if (!UnityMainThreadDispatcher.Exists())
+        {
+            GameObject dispatcherObject = new GameObject("UnityMainThreadDispatcher");
+            dispatcherObject.AddComponent<UnityMainThreadDispatcher>();
+        }
+
         dispatcher = UnityMainThreadDispatcher.Instance();
     }
 
-    // 로그인 버튼에 연결
     public void OnClickLogin()
     {
+        if (NickNameInput == null)
+        {
+            SetMessage("NickNameInput이 연결되지 않았습니다.");
+            return;
+        }
+
         string nickName = NickNameInput.text.Trim();
 
         if (string.IsNullOrEmpty(nickName))
         {
-            CheckText.text = "닉네임을 입력하세요.";
+            SetMessage("닉네임을 입력하세요.");
             return;
         }
 
+        SetMessage("로그인 확인 중...");
         Login(nickName);
     }
 
@@ -51,11 +68,11 @@ public class UserLogin : MonoBehaviour
             .GetValueAsync()
             .ContinueWith(task =>
             {
-                if (task.IsFaulted)
+                if (task.IsFaulted || task.IsCanceled)
                 {
                     dispatcher.Enqueue(() =>
                     {
-                        CheckText.text = "Firebase 읽기 오류";
+                        SetMessage("Firebase 읽기 오류");
                     });
                     return;
                 }
@@ -66,7 +83,7 @@ public class UserLogin : MonoBehaviour
                 {
                     dispatcher.Enqueue(() =>
                     {
-                        CheckText.text = "존재하지 않는 닉네임입니다.";
+                        SetMessage("존재하지 않는 닉네임입니다.");
                     });
                     return;
                 }
@@ -81,7 +98,7 @@ public class UserLogin : MonoBehaviour
                         PlayerPrefs.SetString("UserNickName", nickName);
                         PlayerPrefs.Save();
 
-                        CheckText.text = "로그인 성공";
+                        SetMessage("로그인 성공");
 
                         if (LoadNextSceneAfterLogin)
                         {
@@ -92,5 +109,15 @@ public class UserLogin : MonoBehaviour
                     break;
                 }
             });
+    }
+
+    void SetMessage(string message)
+    {
+        if (CheckText != null)
+        {
+            CheckText.text = message;
+        }
+
+        Debug.Log(message);
     }
 }

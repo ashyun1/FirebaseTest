@@ -11,7 +11,7 @@ public class UserRegister : MonoBehaviour
     UnityMainThreadDispatcher dispatcher;
 
     [Header("Firebase")]
-    [SerializeField] string databaseUrl = "https://myproject-76240-default-rtdb.asia-southeast1.firebasedatabase.app/";
+    [SerializeField] string databaseUrl = "https://final-firebase-userdata-default-rtdb.firebaseio.com";
 
     [Header("UI")]
     [SerializeField] InputField NickNameInput;
@@ -25,20 +25,37 @@ public class UserRegister : MonoBehaviour
     {
         database = FirebaseDatabase.GetInstance(databaseUrl);
         reference = database.RootReference;
+        SetupDispatcher();
+    }
+
+    void SetupDispatcher()
+    {
+        if (!UnityMainThreadDispatcher.Exists())
+        {
+            GameObject dispatcherObject = new GameObject("UnityMainThreadDispatcher");
+            dispatcherObject.AddComponent<UnityMainThreadDispatcher>();
+        }
+
         dispatcher = UnityMainThreadDispatcher.Instance();
     }
 
-    // 회원가입 버튼에 연결
     public void OnClickRegister()
     {
+        if (NickNameInput == null)
+        {
+            SetMessage("NickNameInput이 연결되지 않았습니다.");
+            return;
+        }
+
         string nickName = NickNameInput.text.Trim();
 
         if (string.IsNullOrEmpty(nickName))
         {
-            CheckText.text = "닉네임을 입력하세요.";
+            SetMessage("닉네임을 입력하세요.");
             return;
         }
 
+        SetMessage("닉네임 확인 중...");
         CheckDuplicateNickName(nickName);
     }
 
@@ -51,11 +68,11 @@ public class UserRegister : MonoBehaviour
             .GetValueAsync()
             .ContinueWith(task =>
             {
-                if (task.IsFaulted)
+                if (task.IsFaulted || task.IsCanceled)
                 {
                     dispatcher.Enqueue(() =>
                     {
-                        CheckText.text = "Firebase 읽기 오류";
+                        SetMessage("Firebase 읽기 오류");
                     });
                     return;
                 }
@@ -66,7 +83,7 @@ public class UserRegister : MonoBehaviour
                 {
                     dispatcher.Enqueue(() =>
                     {
-                        CheckText.text = "이미 사용 중인 닉네임입니다.";
+                        SetMessage("이미 사용 중인 닉네임입니다.");
                     });
                     return;
                 }
@@ -85,22 +102,19 @@ public class UserRegister : MonoBehaviour
 
         newUserRef.SetRawJsonValueAsync(json).ContinueWith(task =>
         {
-            if (task.IsFaulted)
-            {
-                dispatcher.Enqueue(() =>
-                {
-                    CheckText.text = "회원가입 실패";
-                });
-                return;
-            }
-
             dispatcher.Enqueue(() =>
             {
+                if (task.IsFaulted || task.IsCanceled)
+                {
+                    SetMessage("회원가입 실패");
+                    return;
+                }
+
                 PlayerPrefs.SetString("UserKey", userKey);
                 PlayerPrefs.SetString("UserNickName", nickName);
                 PlayerPrefs.Save();
 
-                CheckText.text = "회원가입 완료";
+                SetMessage("회원가입 완료");
 
                 if (LoadNextSceneAfterRegister)
                 {
@@ -108,5 +122,15 @@ public class UserRegister : MonoBehaviour
                 }
             });
         });
+    }
+
+    void SetMessage(string message)
+    {
+        if (CheckText != null)
+        {
+            CheckText.text = message;
+        }
+
+        Debug.Log(message);
     }
 }
